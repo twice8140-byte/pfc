@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PFC Pro - Web風リアルタイム食品検索</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body { background-color: #0b1329; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    .card { background: #132247; border: 1px solid #1e3a8a; }
+    .card-accent { background: #1b2e5d; border: 1px solid #2563eb; }
+    .input-field { background: #0b1329; border: 1px solid #2563eb; color: #ffffff; }
+    .input-field:focus { border-color: #60a5fa; outline: none; }
+    .modal-backdrop { background: rgba(11, 19, 41, 0.96); backdrop-filter: blur(12px); }
+  </style>
+</head>
+<body class="pb-28 pt-4 px-4 max-w-md mx-auto min-h-screen flex flex-col justify-between">
+
+  <!-- ヘッダー -->
+  <header class="flex justify-between items-center mb-5">
+    <div>
+      <h1 class="text-2xl font-black tracking-wider text-white uppercase flex items-center gap-2">
+        <span class="bg-blue-600 text-white px-2.5 py-0.5 rounded-xl text-lg shadow-lg shadow-blue-600/50">PFC</span>
+        <span class="text-blue-400">PRO</span>
+      </h1>
+      <p class="text-xs text-blue-300 font-medium">Web風リアルタイム食品DB検索</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="openModal('weightModal')" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-bold text-xs border border-blue-400 shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition-all">
+        <i class="fa-solid fa-weight-scale text-sm"></i> 体重
+      </button>
+      <button onclick="openModal('settingsModal')" class="p-2.5 bg-blue-950 hover:bg-blue-900 rounded-2xl text-white border border-blue-700 shadow-md transition-all">
+        <i class="fa-solid fa-sliders text-base"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ -->
+  <main class="space-y-5">
+    <!-- 本日の要約カード -->
+    <section class="card rounded-3xl p-5 shadow-2xl border-2 border-blue-500/40">
+      <div class="flex justify-between items-center mb-2 border-b border-blue-800/80 pb-2">
+        <h2 class="text-xs font-bold text-blue-300 tracking-wider uppercase flex items-center gap-1.5">
+          <i class="fa-solid fa-chart-pie"></i> Today's Balance
+        </h2>
+        <div class="flex items-center gap-2">
+          <span id="latestWeightBadge" class="text-xs text-blue-300 font-bold font-mono bg-blue-950/80 px-2.5 py-1 rounded-lg border border-blue-800">-- kg</span>
+          <span id="targetCaloriesLabel" class="text-xs text-blue-200 font-bold font-mono bg-blue-950 px-2.5 py-1 rounded-lg border border-blue-700">TARGET: 2000 kcal</span>
+        </div>
+      </div>
+      
+      <div class="relative flex justify-center items-center my-4">
+        <div class="w-40 h-40"><canvas id="calorieChart"></canvas></div>
+        <div class="absolute text-center">
+          <span class="text-[11px] text-blue-300 uppercase tracking-widest font-bold block">REMAINING</span>
+          <span id="remainingCalories" class="text-3xl font-black text-white font-mono tracking-tight">2000</span>
+          <span class="text-xs text-blue-400 font-bold block">kcal</span>
+        </div>
+      </div>
+
+      <div class="space-y-3 mt-5 text-xs font-mono">
+        <div>
+          <div class="flex justify-between mb-1.5 text-slate-100 font-bold">
+            <span class="text-blue-400">P (Protein)</span>
+            <span id="pStats" class="text-white">0 / 150g</span>
+          </div>
+          <div class="w-full bg-blue-950 rounded-full h-2.5 overflow-hidden border border-blue-800">
+            <div id="pBar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between mb-1.5 text-slate-100 font-bold">
+            <span class="text-sky-300">F (Fat)</span>
+            <span id="fStats" class="text-white">0 / 50g</span>
+          </div>
+          <div class="w-full bg-blue-950 rounded-full h-2.5 overflow-hidden border border-blue-800">
+            <div id="fBar" class="bg-sky-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+        <div>
+          <div class="flex justify-between mb-1.5 text-slate-100 font-bold">
+            <span class="text-indigo-300">C (Carbs)</span>
+            <span id="cStats" class="text-white">0 / 238g</span>
+          </div>
+          <div class="w-full bg-blue-950 rounded-full h-2.5 overflow-hidden border border-blue-800">
+            <div id="cBar" class="bg-indigo-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 朝・昼・夜・間食カード -->
+    <div id="mealCategoriesContainer" class="space-y-5">
+      <!-- JavaScriptで動的生成 -->
+    </div>
+
+    <!-- AI 栄養＆ボディメイク アドバイス欄 -->
+    <section class="card rounded-3xl p-5 border-2 border-blue-500/50 bg-gradient-to-br from-blue-950 to-slate-900 shadow-xl space-y-3">
+      <div class="flex items-center gap-2 border-b border-blue-800 pb-2.5">
+        <div class="bg-blue-600 text-white w-7 h-7 rounded-xl flex items-center justify-center text-xs shadow-md shadow-blue-500/30">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm text-white">AI Nutrition Advisor</h3>
+          <p class="text-[10px] text-blue-300">筋トレ・体脂肪分解視点のリアルタイム分析</p>
+        </div>
+      </div>
+
+      <div id="aiAdviceContent" class="text-xs text-slate-200 leading-relaxed space-y-2">
+        <p class="text-blue-300 text-center py-2">食材を記録すると、AIが筋トレ・ダイエット効果をリアルタイム分析します。</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Web風リアルタイム検索モーダル -->
+  <div id="searchModal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center p-2 z-50">
+    <div class="card w-full max-w-md rounded-3xl p-5 space-y-4 h-[96vh] flex flex-col justify-between border-2 border-blue-400 shadow-2xl">
+      
+      <!-- 検索ヘッダー -->
+      <div class="space-y-3 border-b border-blue-800/80 pb-3">
+        <div class="flex justify-between items-center">
+          <h3 id="modalCategoryTitle" class="font-extrabold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-globe text-blue-400"></i> Web風食品DBリアルタイム検索
+          </h3>
+          <button onclick="closeModal('searchModal')" class="bg-blue-950 hover:bg-blue-900 text-white p-2 rounded-2xl border border-blue-700">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- 検索フォーム -->
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <input type="text" id="webSearchQuery" placeholder="商品名・料理名 (例: サラダチキン, 鶏胸肉)" class="w-full input-field rounded-2xl py-2.5 pl-9 pr-3 font-bold text-xs">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-blue-400 text-xs"></i>
+          </div>
+          <button onclick="performWebSearch()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-black px-4 py-2.5 rounded-2xl shadow-md flex items-center gap-1">
+            検索
+          </button>
+          <button onclick="startBarcodeScan()" class="bg-blue-950 hover:bg-blue-900 text-blue-300 text-xs font-bold px-3 py-2.5 rounded-2xl border border-blue-700 flex items-center gap-1">
+            <i class="fa-solid fa-barcode"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- バーコードカメラ表示エリア -->
+      <div id="barcodeScannerArea" class="hidden bg-black rounded-2xl overflow-hidden border-2 border-blue-500 relative min-h-[160px]">
+        <div id="qr-reader" class="w-full"></div>
+        <button onclick="stopBarcodeScan()" class="absolute top-2 right-2 bg-rose-600 text-white text-[10px] px-2 py-1 rounded-lg font-bold">閉じる</button>
+      </div>
+
+      <!-- Web検索結果一覧 -->
+      <div id="searchResultsList" class="flex-1 overflow-y-auto space-y-3 pr-1">
+        <p class="text-blue-300/70 text-xs text-center py-8">キーワードを入力して「検索」を押すと、食品データベースからWeb一覧風に検索結果が表示されます。</p>
+      </div>
+
+      <div class="pt-2 border-t border-blue-800/80">
+        <button onclick="closeModal('searchModal')" class="w-full bg-blue-950 hover:bg-blue-900 text-blue-200 text-xs font-bold py-2.5 rounded-xl border border-blue-700">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 体重記録＆推移モーダル -->
+  <div id="weightModal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center p-3 z-50">
+    <div class="card w-full max-w-md rounded-3xl p-5 space-y-4 h-[92vh] flex flex-col justify-between border-2 border-blue-400 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-blue-800 pb-3">
+        <div>
+          <h3 class="font-extrabold text-base text-white flex items-center gap-2">
+            <i class="fa-solid fa-chart-line text-blue-400"></i> 体重記録 & 推移グラフ
+          </h3>
+          <p class="text-[11px] text-blue-200">日々の体重・体脂肪率の推移を記録</p>
+        </div>
+        <button onclick="closeModal('weightModal')" class="bg-blue-950 hover:bg-blue-900 text-white p-2 rounded-2xl border border-blue-700">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div class="bg-blue-950/90 p-3.5 rounded-2xl border border-blue-800 space-y-2.5">
+          <span class="text-xs font-bold text-blue-300 block border-b border-blue-900 pb-1">✏️ 今日の体重を記録</span>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label class="block text-slate-300 mb-1 font-bold">体重 (kg)</label>
+              <input type="number" step="0.1" id="inputWeight" placeholder="68.5" class="w-full input-field rounded-xl p-2 font-bold font-mono text-center">
+            </div>
+            <div>
+              <label class="block text-slate-300 mb-1 font-bold">体脂肪率 (%)</label>
+              <input type="number" step="0.1" id="inputFat" placeholder="18.0" class="w-full input-field rounded-xl p-2 font-bold font-mono text-center">
+            </div>
+          </div>
+          <button onclick="addWeightLog()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold py-2.5 rounded-xl shadow-md shadow-blue-600/30 flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> 今日のデータを保存する
+          </button>
+        </div>
+
+        <div class="bg-blue-950/60 p-3 rounded-2xl border border-blue-900 space-y-2">
+          <span class="text-xs font-bold text-blue-300 block">📈 体重推移グラフ</span>
+          <div class="w-full h-44"><canvas id="weightChart"></canvas></div>
+        </div>
+
+        <div class="space-y-1.5">
+          <span class="text-xs font-bold text-blue-300 block">📋 履歴一覧</span>
+          <div id="weightLogList" class="space-y-1 text-xs"><p class="text-blue-400/60 text-center py-2">記録がありません</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定モーダル (TDEE機能付き) -->
+  <div id="settingsModal" class="fixed inset-0 modal-backdrop hidden flex items-center justify-center p-4 z-50">
+    <div class="card w-full max-w-md rounded-3xl p-5 space-y-4 border-2 border-blue-500/50 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-blue-800 pb-2">
+        <h3 class="font-bold text-sm text-white flex items-center gap-1.5">
+          <i class="fa-solid fa-calculator text-blue-400"></i> 目標設定 (TDEE & PFC)
+        </h3>
+        <button onclick="closeModal('settingsModal')" class="text-blue-300 hover:text-white p-1"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="bg-blue-950 p-3.5 rounded-2xl border border-blue-800 space-y-3">
+        <span class="text-xs font-bold text-blue-300 block border-b border-blue-800/80 pb-1">✨ 身体データからTDEE（消費カロリー）を算出</span>
+        
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-slate-300 mb-1">性別</label>
+            <select id="tdeeGender" class="w-full input-field rounded-xl p-2 font-bold">
+              <option value="male">男性</option>
+              <option value="female">女性</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">年齢</label>
+            <input type="number" id="tdeeAge" value="23" class="w-full input-field rounded-xl p-2 font-bold font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-slate-300 mb-1">身長 (cm)</label>
+            <input type="number" id="tdeeHeight" value="172" class="w-full input-field rounded-xl p-2 font-bold font-mono">
+          </div>
+          <div>
+            <label class="block text-slate-300 mb-1">体重 (kg)</label>
+            <input type="number" id="tdeeWeight" value="68" class="w-full input-field rounded-xl p-2 font-bold font-mono">
+          </div>
+        </div>
+
+        <div class="text-xs">
+          <label class="block text-slate-300 mb-1">日常生活の運動量</label>
+          <select id="tdeeActivity" class="w-full input-field rounded-xl p-2 font-bold">
+            <option value="1.2">ほぼ運動しない (デスクワーク)</option>
+            <option value="1.375">軽い運動 (週1~3回のトレーニング)</option>
+            <option value="1.55" selected>適度な運動 (週3~5回の筋トレ)</option>
+            <option value="1.725">激しい運動 (週6~7回の高強度トレ)</option>
+          </select>
+        </div>
+
+        <div class="text-xs">
+          <label class="block text-slate-300 mb-1">目指すゴール</label>
+          <select id="tdeeGoal" class="w-full input-field rounded-xl p-2 font-bold">
+            <option value="lose">減量 (体脂肪落とす: -500kcal)</option>
+            <option value="maintain" selected>体型維持 (TDEEと同等)</option>
+            <option value="gain">増量・筋肥大 (+300kcal)</option>
+          </select>
+        </div>
+
+        <button onclick="calculateTDEE()" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-xl shadow-md">TDEEから目標を自動セットする</button>
+      </div>
+
+      <div class="space-y-3 text-xs font-mono pt-1">
+        <div><label class="block text-slate-300 mb-1 font-bold">目標カロリー (kcal)</label><input type="number" id="targetCalInput" class="w-full input-field rounded-xl py-2 px-3 font-bold"></div>
+        <div><label class="block text-slate-300 mb-1 font-bold">目標 タンパク質 (g)</label><input type="number" id="targetPInput" class="w-full input-field rounded-xl py-2 px-3 font-bold"></div>
+        <div><label class="block text-slate-300 mb-1 font-bold">目標 脂質 (g)</label><input type="number" id="targetFInput" class="w-full input-field rounded-xl py-2 px-3 font-bold"></div>
+        <div><label class="block text-slate-300 mb-1 font-bold">目標 炭水化物 (g)</label><input type="number" id="targetCInput" class="w-full input-field rounded-xl py-2 px-3 font-bold"></div>
+        <div class="pt-3 flex gap-2">
+          <button onclick="saveSettings()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl shadow-lg">設定を保存</button>
+          <button onclick="resetData()" class="bg-blue-950 hover:bg-blue-900 text-blue-300 text-xs px-3 py-2.5 rounded-xl border border-blue-800">全クリア</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const categories = [
+      { key: 'breakfast', label: '朝食', icon: 'fa-sun', color: 'text-amber-400' },
+      { key: 'lunch', label: '昼食', icon: 'fa-utensils', color: 'text-sky-300' },
+      { key: 'dinner', label: '夕食', icon: 'fa-moon', color: 'text-indigo-400' },
+      { key: 'snack', label: '間食', icon: 'fa-cookie-bite', color: 'text-emerald-400' }
+    ];
+
+    let appData = {
+      targets: { cal: 2000, p: 150, f: 50, c: 238 },
+      meals: { breakfast: [], lunch: [], dinner: [], snack: [] },
+      categoryHistories: { breakfast: [], lunch: [], dinner: [], snack: [] },
+      weightLogs: []
+    };
+
+    let activeModalCategory = 'breakfast';
+    let calorieChart = null;
+    let weightChart = null;
+    let html5QrCode = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      initChart();
+      initWeightChart();
+      renderCategoryCards();
+      updateUI();
+      updateWeightUI();
+    });
+
+    function loadData() {
+      const saved = localStorage.getItem('pfc_app_data_web');
+      if (saved) {
+        try { 
+          const parsed = JSON.parse(saved);
+          appData.targets = parsed.targets || appData.targets;
+          appData.meals = parsed.meals || appData.meals;
+          appData.categoryHistories = parsed.categoryHistories || appData.categoryHistories;
+          appData.weightLogs = parsed.weightLogs || [];
+        } catch(e){}
+      }
+    }
+
+    function saveData() {
+      localStorage.setItem('pfc_app_data_web', JSON.stringify(appData));
+      updateUI();
+      updateWeightUI();
+    }
+
+    function initChart() {
+      const ctx = document.getElementById('calorieChart').getContext('2d');
+      calorieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { datasets: [{ data: [0, appData.targets.cal], backgroundColor: ['#2563eb', '#1e3a8a'], borderWidth: 0 }] },
+        options: { cutout: '82%', plugins: { tooltip: { enabled: false } }, responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    function initWeightChart() {
+      const ctx = document.getElementById('weightChart').getContext('2d');
+      weightChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '体重 (kg)',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { color: '#93c5fd', font: { size: 10 } }, grid: { display: false } },
+            y: { ticks: { color: '#93c5fd', font: { size: 10 } }, grid: { color: '#1e3a8a' } }
+          }
+        }
+      });
+    }
+
+    function addWeightLog() {
+      const w = parseFloat(document.getElementById('inputWeight').value);
+      const f = parseFloat(document.getElementById('inputFat').value) || null;
+
+      if (!w) return alert("体重を入力してください");
+
+      const today = new Date();
+      const dateStr = `${today.getMonth() + 1}/${today.getDate()}`;
+
+      appData.weightLogs.push({ date: dateStr, weight: w, fat: f });
+      document.getElementById('tdeeWeight').value = w;
+
+      saveData();
+      document.getElementById('inputWeight').value = '';
+      document.getElementById('inputFat').value = '';
+    }
+
+    function updateWeightUI() {
+      const logs = appData.weightLogs || [];
+      const listEl = document.getElementById('weightLogList');
+      const badgeEl = document.getElementById('latestWeightBadge');
+
+      if (logs.length === 0) {
+        listEl.innerHTML = `<p class="text-blue-400/60 text-center py-2">記録がありません</p>`;
+        badgeEl.innerText = `-- kg`;
+      } else {
+        const latest = logs[logs.length - 1];
+        badgeEl.innerText = `${latest.weight} kg`;
+
+        listEl.innerHTML = '';
+        logs.slice().reverse().forEach((log, idx) => {
+          const realIdx = logs.length - 1 - idx;
+          const row = document.createElement('div');
+          row.className = 'flex justify-between items-center bg-blue-950 p-2 rounded-xl border border-blue-900 font-mono';
+          row.innerHTML = `
+            <span class="text-blue-300 font-bold">${log.date}</span>
+            <div class="flex items-center gap-3">
+              <span class="text-white font-bold">${log.weight} kg${log.fat ? `<span class="text-blue-400 text-[10px]">(${log.fat}%)</span>` : ''}</span>
+              <button onclick="removeWeightLog(${realIdx})" class="text-blue-400 hover:text-rose-400 p-0.5"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+          `;
+          listEl.appendChild(row);
+        });
+      }
+
+      if (weightChart) {
+        weightChart.data.labels = logs.slice(-7).map(l => l.date);
+        weightChart.data.datasets[0].data = logs.slice(-7).map(l => l.weight);
+        weightChart.update();
+      }
+    }
+
+    function removeWeightLog(idx) {
+      appData.weightLogs.splice(idx, 1);
+      saveData();
+    }
+
+    function calculateTDEE() {
+      const gender = document.getElementById('tdeeGender').value;
+      const age = parseFloat(document.getElementById('tdeeAge').value) || 20;
+      const height = parseFloat(document.getElementById('tdeeHeight').value) || 170;
+      const weight = parseFloat(document.getElementById('tdeeWeight').value) || 65;
+      const act = parseFloat(document.getElementById('tdeeActivity').value) || 1.55;
+      const goal = document.getElementById('tdeeGoal').value;
+
+      let bmr = (10 * weight) + (6.25 * height) - (5 * age);
+      bmr += (gender === 'male') ? 5 : -161;
+
+      let tdee = bmr * act;
+      let targetCal = tdee;
+      if (goal === 'lose') targetCal -= 500;
+      else if (goal === 'gain') targetCal += 300;
+
+      targetCal = Math.round(targetCal);
+
+      const targetP = Math.round(weight * 2.0);
+      const targetF = Math.round((targetCal * 0.225) / 9);
+      const targetC = Math.round((targetCal - (targetP * 4) - (targetF * 9)) / 4);
+
+      document.getElementById('targetCalInput').value = targetCal;
+      document.getElementById('targetPInput').value = targetP;
+      document.getElementById('targetFInput').value = targetF;
+      document.getElementById('targetCInput').value = targetC;
+
+      alert(`TDEE(消費カロリー):約${Math.round(tdee)}kcal から、目標カロリー: ${targetCal}kcal (P:${targetP}g F:${targetF}g C:${targetC}g) を自動セットしました！`);
+    }
+
+    function renderCategoryCards() {
+      const container = document.getElementById('mealCategoriesContainer');
+      container.innerHTML = '';
+
+      categories.forEach(cat => {
+        const section = document.createElement('section');
+        section.className = 'card rounded-3xl p-5 space-y-4 border-2 border-blue-500/30';
+        section.innerHTML = `
+          <div class="flex justify-between items-center border-b border-blue-800/80 pb-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-2xl bg-blue-950 flex items-center justify-center border border-blue-800 shadow-md">
+                <i class="fa-solid ${cat.icon}${cat.color} text-lg"></i>
+              </div>
+              <div>
+                <h3 class="font-extrabold text-base text-white tracking-wide">${cat.label}</h3>
+                <span class="text-[10px] text-blue-300 font-mono">CATEGORY TOTAL</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="catTotal_${cat.key}" class="text-sm font-mono font-black text-blue-300 bg-blue-950 px-3 py-1 rounded-xl border border-blue-800">0 kcal</span>
+              <button onclick="openSearchModal('${cat.key}')" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-2 rounded-xl font-black shadow-lg shadow-blue-600/30 transition-all flex items-center gap-1.5">
+                <i class="fa-solid fa-magnifying-glass text-xs"></i> 検索追加
+              </button>
+            </div>
+          </div>
+
+          <div id="loggedList_${cat.key}" class="space-y-2"></div>
+
+          <div class="pt-2 border-t border-blue-900/60">
+            <span class="text-[10px] font-bold text-blue-300 block mb-1.5"><i class="fa-solid fa-clock-rotate-left mr-1"></i>履歴から1タップ追加:</span>
+            <div id="historyList_${cat.key}" class="flex flex-wrap gap-1.5 text-xs"></div>
+          </div>
+        `;
+        container.appendChild(section);
+      });
+    }
+
+    function openSearchModal(catKey) {
+      activeModalCategory = catKey;
+      const catObj = categories.find(c => c.key === catKey);
+      document.getElementById('modalCategoryTitle').innerHTML = `<i class="fa-solid ${catObj.icon} ${catObj.color}"></i> ${catObj.label}にWeb検索追加`;
+      document.getElementById('webSearchQuery').value = '';
+      document.getElementById('searchResultsList').innerHTML = `<p class="text-blue-300/70 text-xs text-center py-8">キーワードを入力して「検索」を押すと、食品データベースからWeb一覧風に検索結果が表示されます。</p>`;
+      
+      openModal('searchModal');
+    }
+
+    // Web風オープンAPI検索関数
+    function performWebSearch() {
+      const q = document.getElementById('webSearchQuery').value.trim();
+      const listEl = document.getElementById('searchResultsList');
+      if (!q) return alert("検索キーワードを入力してください");
+
+      listEl.innerHTML = `<p class="text-blue-300/70 text-xs text-center py-8">Webデータベースから検索中...</p>`;
+
+      fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=15`)
+        .then(res => res.json())
+        .then(data => {
+          listEl.innerHTML = '';
+          if (data.products && data.products.length > 0) {
+            data.products.forEach(p => {
+              const name = p.product_name_ja || p.product_name || "市販食品";
+              const nut = p.nutriments || {};
+              const cal = Math.round(nut['energy-kcal_100g'] || nut['energy-kcal_serving'] || 150);
+              const protein = Math.round((nut.proteins_100g || nut.proteins_serving || 10) * 10) / 10;
+              const fat = Math.round((nut.fat_100g || nut.fat_serving || 5) * 10) / 10;
+              const carbs = Math.round((nut.carbohydrates_100g || nut.carbohydrates_serving || 20) * 10) / 10;
+
+              const card = document.createElement('div');
+              card.className = 'card-accent rounded-2xl p-3 space-y-2 border border-blue-500/40 hover:border-blue-400 transition-all';
+              card.innerHTML = `
+                <div class="flex justify-between items-start">
+                  <div>
+                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest block font-mono">WEB RESULT</span>
+                    <h4 class="font-black text-sm text-white">${name}</h4>
+                  </div>
+                  <button onclick="addWebSearchItem('${name.replace(/'/g, "\\'")}', ${protein},${fat}, ${carbs},${cal})" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-md flex items-center gap-1">
+                    <i class="fa-solid fa-plus text-[10px]"></i> 追加
+                  </button>
+                </div>
+                <div class="flex justify-between items-center text-xs font-mono bg-blue-950/80 p-2 rounded-xl border border-blue-900">
+                  <span class="text-blue-200">P:${protein}g / F:${fat}g / C:${carbs}g</span>
+                  <span class="font-bold text-blue-400">${cal} kcal (100gあたり)</span>
+                </div>
+              `;
+              listEl.appendChild(card);
+            });
+          } else {
+            listEl.innerHTML = `<p class="text-blue-300/70 text-xs text-center py-8">該当する食品が見つかりませんでした。</p>`;
+          }
+        })
+        .catch(() => {
+          listEl.innerHTML = `<p class="text-rose-400/80 text-xs text-center py-8">検索エラーが発生しました。通信環境を確認してください。</p>`;
+        });
+    }
+
+    function addWebSearchItem(name, p, f, c, cal) {
+      const item = {
+        name: name,
+        displayAmount: '100g',
+        gram: 100,
+        p: p,
+        f: f,
+        c: c,
+        cal: cal
+      };
+
+      appData.meals[activeModalCategory].push(item);
+
+      const hist = appData.categoryHistories[activeModalCategory] || [];
+      if (!hist.some(h => h.name === item.name)) {
+        hist.unshift(item);
+        if (hist.length > 8) hist.pop();
+        appData.categoryHistories[activeModalCategory] = hist;
+      }
+
+      saveData();
+      alert(`「${name}」を追加しました！`);
+    }
+
+    function startBarcodeScan() {
+      document.getElementById('barcodeScannerArea').classList.remove('hidden');
+      html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 220, height: 160 } },
+        (decodedText) => {
+          fetchBarcodeInfo(decodedText);
+          stopBarcodeScan();
+        },
+        () => {}
+      ).catch(() => alert("カメラの起動に失敗しました。カメラ権限を確認してください。"));
+    }
+
+    function stopBarcodeScan() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+          html5QrCode.clear();
+          document.getElementById('barcodeScannerArea').classList.add('hidden');
+        }).catch(() => document.getElementById('barcodeScannerArea').classList.add('hidden'));
+      } else {
+        document.getElementById('barcodeScannerArea').classList.add('hidden');
+      }
+    }
+
+    function fetchBarcodeInfo(barcode) {
+      fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 1 && data.product) {
+            const p = data.product;
+            const productName = p.product_name_ja || p.product_name || "市販食品";
+            document.getElementById('webSearchQuery').value = productName;
+            performWebSearch();
+            alert(`「${productName}」のバーコードを読み込みました！`);
+          } else {
+            alert("該当バーコードの商品データが見つかりませんでした。");
+          }
+        })
+        .catch(() => alert("バーコード検索に失敗しました。"));
+    }
+
+    function updateAIAdvice(totalP, totalF, totalC, totalCal, allItems) {
+      const adviceEl = document.getElementById('aiAdviceContent');
+      
+      if (allItems.length === 0) {
+        adviceEl.innerHTML = `<p class="text-blue-300 text-center py-2">食材を記録すると、AIが筋トレ・ダイエット効果をリアルタイム分析します。</p>`;
+        return;
+      }
+
+      const foodNames = allItems.map(i => i.name).join('・');
+
+      let text = ``;
+      text += `<p class="font-bold text-blue-300">【本日の摂取メリット分析】</p>`;
+      text += `<p>記録食材: <b class="text-white">${foodNames}</b></p>`;
+
+      text += `<div class="bg-blue-950/90 p-3 rounded-2xl border border-blue-800 space-y-2 mt-2">`;
+      
+      text += `<p><b class="text-blue-400">💪 筋トレ・ボディメイク面:</b><br>`;
+      if (totalP >= 80) {
+        text += `タンパク質がしっかり確保されており、筋タンパク質の合成効率が高まっています。超回復と筋肥大を力強くサポートします。`;
+      } else {
+        text += `筋肉の分解を防ぐため、プロテインや鶏胸肉・卵を追加してタンパク質を補給してください。`;
+      }
+      text += `</p>`;
+
+      text += `<p><b class="text-sky-300">🔥 ダイエット・体脂肪コントロール面:</b><br>`;
+      if (totalF <= 40) {
+        text += `脂質が抑えられており、クリーンなPFCバランスです。脂肪が蓄積されにくい良好な代謝状態です。`;
+      } else {
+        text += `脂質がやや高めです。和食やノンオイル食材を選ぶと脂肪燃焼が加速します。`;
+      }
+      text += `</p>`;
+
+      text += `</div>`;
+
+      adviceEl.innerHTML = text;
+    }
+
+    function updateUI() {
+      let totalP = 0, totalF = 0, totalC = 0, totalCal = 0;
+      let allItems = [];
+
+      categories.forEach(cat => {
+        const listEl = document.getElementById(`loggedList_${cat.key}`);
+        const catTotalEl = document.getElementById(`catTotal_${cat.key}`);
+        const historyListEl = document.getElementById(`historyList_${cat.key}`);
+        
+        listEl.innerHTML = '';
+        historyListEl.innerHTML = '';
+
+        let catCal = 0;
+        const items = appData.meals[cat.key] || [];
+
+        if (items.length === 0) {
+          listEl.innerHTML = `<p class="text-blue-400/60 text-xs text-center py-2">記録なし</p>`;
+        } else {
+          items.forEach((item, idx) => {
+            totalP += item.p; totalF += item.f; totalC += item.c; totalCal += item.cal;
+            catCal += item.cal;
+            allItems.push(item);
+
+            const row = document.createElement('div');
+            row.className = 'flex justify-between items-center bg-blue-950 p-3 rounded-2xl border border-blue-800 font-mono text-xs';
+            row.innerHTML = `
+              <div>
+                <span class="font-bold text-white text-sm block">${item.name}</span>
+                <span class="text-blue-300 text-[10px] font-bold">分量: ${item.displayAmount || item.gram + 'g'}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-blue-200 text-[11px]">P:${item.p} F:${item.f} C:${item.c} <b class="text-blue-400 font-bold text-sm ml-1">${item.cal}kcal</b></span>
+                <button onclick="removeMealItem('${cat.key}', ${idx})" class="text-blue-400 hover:text-rose-400 p-1"><i class="fa-solid fa-xmark text-base"></i></button>
+              </div>
+            `;
+            listEl.appendChild(row);
+          });
+        }
+
+        catTotalEl.innerText = `${catCal} kcal`;
+
+        const catHist = appData.categoryHistories[cat.key] || [];
+        if (catHist.length === 0) {
+          historyListEl.innerHTML = `<span class="text-blue-400/50 text-[10px]">履歴なし</span>`;
+        } else {
+          catHist.forEach(hItem => {
+            const tag = document.createElement('button');
+            tag.className = 'bg-blue-950 hover:bg-blue-900 text-blue-200 border border-blue-800 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all';
+            tag.innerText = `＋ ${hItem.name}`;
+            tag.onclick = () => {
+              appData.meals[cat.key].push(hItem);
+              saveData();
+            };
+            historyListEl.appendChild(tag);
+          });
+        }
+      });
+
+      totalP = Math.round(totalP * 10) / 10;
+      totalF = Math.round(totalF * 10) / 10;
+      totalC = Math.round(totalC * 10) / 10;
+      totalCal = Math.round(totalCal);
+
+      document.getElementById('pStats').innerText = `${totalP} / ${appData.targets.p}g`;
+      document.getElementById('fStats').innerText = `${totalF} / ${appData.targets.f}g`;
+      document.getElementById('cStats').innerText = `${totalC} / ${appData.targets.c}g`;
+
+      document.getElementById('pBar').style.width = `${Math.min(100, (totalP / appData.targets.p) * 100)}%`;
+      document.getElementById('fBar').style.width = `${Math.min(100, (totalF / appData.targets.f) * 100)}%`;
+      document.getElementById('cBar').style.width = `${Math.min(100, (totalC / appData.targets.c) * 100)}%`;
+
+      const remaining = appData.targets.cal - totalCal;
+      document.getElementById('remainingCalories').innerText = remaining;
+      document.getElementById('targetCaloriesLabel').innerText = `TARGET: ${appData.targets.cal} kcal`;
+
+      if (calorieChart) {
+        calorieChart.data.datasets[0].data = [totalCal, Math.max(0, remaining)];
+        calorieChart.update();
+      }
+
+      updateAIAdvice(totalP, totalF, totalC, totalCal, allItems);
+    }
+
+    function removeMealItem(catKey, idx) {
+      appData.meals[catKey].splice(idx, 1);
+      saveData();
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { 
+      if (id === 'searchModal') stopBarcodeScan();
+      document.getElementById(id).classList.add('hidden'); 
+    }
+
+    function saveSettings() {
+      appData.targets.cal = parseInt(document.getElementById('targetCalInput').value) || 2000;
+      appData.targets.p = parseInt(document.getElementById('targetPInput').value) || 150;
+      appData.targets.f = parseInt(document.getElementById('targetFInput').value) || 50;
+      appData.targets.c = parseInt(document.getElementById('targetCInput').value) || 238;
+      saveData();
+      closeModal('settingsModal');
+    }
+
+    function resetData() {
+      if (confirm("本日の記録をすべてクリアしますか？")) {
+        categories.forEach(c => appData.meals[c.key] = []);
+        saveData();
+        closeModal('settingsModal');
+      }
+    }
+  </script>
+</body>
+</html>
